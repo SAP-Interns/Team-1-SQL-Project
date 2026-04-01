@@ -1,0 +1,323 @@
+/* =========================================
+   QUERY 1
+   Gross Revenue per Month and Country
+   ========================================= */
+
+-- Returns gross revenue before discounts,
+-- grouped by month and country.
+
+SELECT
+    d.year,
+    d.month,
+    d.month_name,
+    r.country_name,
+    SUM(li.gross_amount) AS gross_revenue
+FROM fact_order_line_items AS li
+INNER JOIN fact_sales_orders AS so
+    ON li.order_id = so.order_id
+INNER JOIN dim_customers AS c
+    ON so.customer_id = c.customer_id
+INNER JOIN dim_regions AS r
+    ON c.region_id = r.region_id
+INNER JOIN dim_date AS d
+    ON li.date_id = d.date_id
+GROUP BY
+    d.year,
+    d.month,
+    d.month_name,
+    r.country_name
+ORDER BY
+    d.year,
+    d.month,
+    r.country_name;
+
+
+	/* =========================================
+   QUERY 2
+   Net Revenue per Quarter and Category
+   ========================================= */
+
+SELECT
+    d.year,
+    d.quarter,
+    cat.category_name,
+    SUM(li.net_amount) AS net_revenue
+FROM fact_order_line_items AS li
+INNER JOIN dim_products AS p
+    ON li.product_id = p.product_id
+INNER JOIN dim_categories AS cat
+    ON p.category_id = cat.category_id
+INNER JOIN dim_date AS d
+    ON li.date_id = d.date_id
+GROUP BY
+    d.year,
+    d.quarter,
+    cat.category_name
+ORDER BY
+    d.year,
+    d.quarter,
+    net_revenue DESC;
+
+	/* =========================================
+   QUERY 3
+   Gross Margin % per Category
+   ========================================= */
+
+SELECT
+    cat.category_name,
+    SUM(li.net_amount) AS net_revenue,
+    SUM(li.quantity * p.unit_cost) AS total_cost,
+    (SUM(li.net_amount) - SUM(li.quantity * p.unit_cost)) AS gross_profit,
+    (SUM(li.net_amount) - SUM(li.quantity * p.unit_cost)) * 100.0
+        / NULLIF(SUM(li.net_amount), 0) AS gross_margin_percent
+FROM fact_order_line_items AS li
+INNER JOIN dim_products AS p
+    ON li.product_id = p.product_id
+INNER JOIN dim_categories AS cat
+    ON p.category_id = cat.category_id
+GROUP BY
+    cat.category_name
+ORDER BY
+    gross_margin_percent DESC;
+
+
+	/* =========================================
+   QUERY 4
+   Average Order Value per Region and Month
+   ========================================= */
+
+SELECT
+    d.year,
+    d.month,
+    d.month_name,
+    r.region_name,
+    CAST(SUM(li.net_amount) AS DECIMAL(18,2)) AS total_revenue,
+    COUNT(DISTINCT so.order_id) AS total_orders,
+    CAST(
+        SUM(li.net_amount) * 1.0
+        / NULLIF(COUNT(DISTINCT so.order_id), 0)
+        AS DECIMAL(18,2)
+    ) AS average_order_value
+FROM fact_sales_orders AS so
+INNER JOIN fact_order_line_items AS li
+    ON so.order_id = li.order_id
+INNER JOIN dim_customers AS c
+    ON so.customer_id = c.customer_id
+INNER JOIN dim_regions AS r
+    ON c.region_id = r.region_id
+INNER JOIN dim_date AS d
+    ON so.order_date_id = d.date_id
+GROUP BY
+    d.year,
+    d.month,
+    d.month_name,
+    r.region_name
+ORDER BY
+    d.year,
+    d.month,
+    r.region_name;
+
+	/* =========================================
+   QUERY 5
+   Return Rate % per Product and Quarter
+   ========================================= */
+SELECT
+    d.year,
+    d.quarter,
+    p.product_id,
+    p.product_sku,
+    p.product_name,
+    SUM(li.quantity) AS units_sold,
+    COALESCE(SUM(r.return_quantity), 0) AS units_returned,
+    CAST(
+        COALESCE(SUM(r.return_quantity), 0) * 100.0
+        / NULLIF(SUM(li.quantity), 0)
+        AS DECIMAL(18,2)
+    ) AS return_rate_percent
+FROM fact_order_line_items AS li
+INNER JOIN dim_products AS p
+    ON li.product_id = p.product_id
+INNER JOIN dim_date AS d
+    ON li.date_id = d.date_id
+LEFT JOIN
+(
+    SELECT
+        line_item_id,
+        SUM(return_quantity) AS return_quantity
+    FROM fact_returns
+    GROUP BY line_item_id
+) AS r
+    ON li.line_item_id = r.line_item_id
+GROUP BY
+    d.year,
+    d.quarter,
+    p.product_id,
+    p.product_sku,
+    p.product_name
+ORDER BY
+    d.year,
+    d.quarter,
+    return_rate_percent DESC,
+    p.product_name;
+
+/* =========================================
+   QUERY 6
+   Quota Attainment % per Sales Rep and Month
+   ========================================= */
+
+SELECT
+    a.year,
+    a.month,
+    a.month_name,
+    a.sales_rep_id,
+    a.employee_code,
+    a.rep_name,
+    a.actual_revenue,
+    q.quota_target,
+    CAST(
+        a.actual_revenue * 100.0
+        / NULLIF(q.quota_target, 0)
+        AS DECIMAL(18,2)
+    ) AS quota_attainment_percent
+FROM
+(
+    SELECT
+        d.year,
+        d.month,
+        d.month_name,
+        sr.sales_rep_id,
+        sr.employee_code,
+        sr.rep_name,
+        CAST(SUM(li.net_amount) AS DECIMAL(18,2)) AS actual_revenue
+    FROM fact_sales_orders AS so
+    INNER JOIN fact_order_line_items AS li
+        ON so.order_id = li.order_id
+    INNER JOIN dim_date AS d
+        ON so.order_date_id = d.date_id
+    INNER JOIN dim_sales_reps AS sr
+        ON so.sales_rep_id = sr.sales_rep_id
+    GROUP BY
+        d.year,
+        d.month,
+        d.month_name,
+        sr.sales_rep_id,
+        sr.employee_code,
+        sr.rep_name
+) AS a
+INNER JOIN
+(
+    SELECT
+        d.year,
+        d.month,
+        sr.sales_rep_id,
+        CAST(SUM(q.quota_amount) AS DECIMAL(18,2)) AS quota_target
+    FROM fact_quotas AS q
+    INNER JOIN dim_date AS d
+        ON q.date_id = d.date_id
+    INNER JOIN dim_sales_reps AS sr
+        ON q.sales_rep_id = sr.sales_rep_id
+    WHERE q.quota_period = 'Monthly'
+    GROUP BY
+        d.year,
+        d.month,
+        sr.sales_rep_id
+) AS q
+    ON a.sales_rep_id = q.sales_rep_id
+   AND a.year = q.year
+   AND a.month = q.month
+ORDER BY
+    a.year,
+    a.month,
+    quota_attainment_percent DESC,
+    a.rep_name;
+
+	/* =========================================
+   QUERY 7
+   Customer Order Frequency per Customer Tier
+   ========================================= */
+
+
+SELECT
+    t.account_tier,
+    t.year,
+    t.quarter,
+    COUNT(t.customer_id) AS customers_in_tier,
+    SUM(t.order_count) AS total_orders,
+    CAST(AVG(t.order_count * 1.0) AS DECIMAL(18,2)) AS average_order_frequency
+FROM
+(
+    SELECT
+        c.account_tier,
+        c.customer_id,
+        d.year,
+        d.quarter,
+        COUNT(DISTINCT so.order_id) AS order_count
+    FROM fact_sales_orders AS so
+    INNER JOIN dim_customers AS c
+        ON so.customer_id = c.customer_id
+    INNER JOIN dim_date AS d
+        ON so.order_date_id = d.date_id
+    GROUP BY
+        c.account_tier,
+        c.customer_id,
+        d.year,
+        d.quarter
+) AS t
+GROUP BY
+    t.account_tier,
+    t.year,
+    t.quarter
+ORDER BY
+    t.year,
+    t.quarter,
+    t.account_tier;
+
+
+	/* =========================================
+   QUERY 8
+   Top 10 Products by Net Revenue in Each Country
+   ========================================= */
+
+
+SELECT
+    x.country_name,
+    x.product_id,
+    x.product_sku,
+    x.product_name,
+    x.net_revenue,
+    x.product_rank
+FROM
+(
+    SELECT
+        r.country_name,
+        p.product_id,
+        p.product_sku,
+        p.product_name,
+        CAST(SUM(li.net_amount) AS DECIMAL(18,2)) AS net_revenue,
+        ROW_NUMBER() OVER
+        (
+            PARTITION BY r.country_name
+            ORDER BY SUM(li.net_amount) DESC
+        ) AS product_rank
+    FROM fact_order_line_items AS li
+    INNER JOIN fact_sales_orders AS so
+        ON li.order_id = so.order_id
+    INNER JOIN dim_customers AS c
+        ON so.customer_id = c.customer_id
+    INNER JOIN dim_regions AS r
+        ON c.region_id = r.region_id
+    INNER JOIN dim_products AS p
+        ON li.product_id = p.product_id
+    INNER JOIN dim_date AS d
+        ON li.date_id = d.date_id
+	WHERE d.year = YEAR(GETDATE()) - 1
+    GROUP BY
+        r.country_name,
+        p.product_id,
+        p.product_sku,
+        p.product_name
+) AS x
+WHERE x.product_rank <= 10
+ORDER BY
+    x.country_name,
+    x.product_rank;
