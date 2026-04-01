@@ -1,0 +1,175 @@
+/* =========================================
+    QUERY 1
+   German Gold-tier customers
+   ========================================= */
+
+-- Returns German Gold-tier customers with credit limits above €50,000,
+-- ordered by credit limit in descending order.
+
+SELECT
+    c.customer_id,
+    c.customer_code,
+    c.customer_type,
+    c.customer_group,
+    c.account_tier,
+    c.credit_limit,
+    r.country_name,
+    r.region_name,
+    r.territory_name
+FROM dim_customers AS c
+INNER JOIN dim_regions AS r
+    ON c.region_id = r.region_id
+WHERE r.country_name = 'Germany'
+  AND c.account_tier = 'Gold'
+  AND c.credit_limit > 50000
+ORDER BY c.credit_limit DESC;
+
+
+
+
+
+
+
+/* =========================================
+   QUERY 2
+   Q3 pending or partially delivered orders
+   ========================================= */
+
+-- Returns sales orders placed in Q3 of the most recent complete year,
+-- with status Pending or Partially Delivered,
+-- including customer code, order date, and total order value.
+
+SELECT
+    so.order_id,
+    c.customer_code,
+    d.full_date AS order_date,
+    so.order_status,
+    SUM(li.net_amount) AS total_order_value
+FROM fact_sales_orders AS so
+INNER JOIN dim_customers AS c
+    ON so.customer_id = c.customer_id
+INNER JOIN dim_date AS d
+    ON so.order_date_id = d.date_id
+INNER JOIN fact_order_line_items AS li
+    ON so.order_id = li.order_id
+WHERE d.year = YEAR(GETDATE()) - 1
+  AND d.quarter = 3
+  AND so.order_status IN ('Pending', 'Partially Delivered')
+GROUP BY
+    so.order_id,
+    c.customer_code,
+    d.full_date,
+    so.order_status
+ORDER BY
+    d.full_date DESC,
+    total_order_value DESC;
+
+
+/* =========================================
+   QUERY 3
+   Products with high gross margin
+   ========================================= */
+
+-- Returns products whose list price is more than three times
+-- their unit cost, ordered by margin descending.
+
+SELECT
+    p.product_id,
+    p.product_sku,
+    p.product_name,
+    p.brand,
+    p.product_type,
+    p.unit_cost,
+    p.list_price,
+    (p.list_price - p.unit_cost) AS margin_amount,
+    ((p.list_price - p.unit_cost) / p.list_price) * 100 AS margin_percent
+FROM dim_products AS p
+WHERE p.list_price > 3 * p.unit_cost
+ORDER BY margin_percent DESC;
+
+
+
+
+/* =========================================
+   QUERY 4
+   Sales reps without customer assignments
+   ========================================= */
+
+-- Returns sales representatives who have not been assigned
+-- to any customer in the last 6 months.
+SELECT
+    sr.sales_rep_id,
+    sr.employee_code,
+    sr.rep_name,
+    sr.job_title
+FROM dim_sales_reps AS sr
+WHERE NOT EXISTS
+(
+    SELECT 1
+    FROM rep_customer_assignments AS a
+    WHERE a.sales_rep_id = sr.sales_rep_id
+      AND a.valid_from <= CAST(GETDATE() AS DATE)
+      AND (
+            a.valid_to IS NULL
+            OR a.valid_to >= DATEADD(MONTH, -6, CAST(GETDATE() AS DATE))
+          )
+)
+ORDER BY sr.rep_name;
+
+
+
+/* =========================================
+    QUERY 5
+   Orders with delivery delay above 14 days
+   ========================================= */
+
+-- Returns orders from NETHERLANDS where the shipping date is
+-- more than 14 days after the order date.
+
+SELECT
+    so.order_id,
+    c.customer_code,
+    r.country_name,
+    od.full_date AS order_date,
+    sd.full_date AS ship_date,
+    DATEDIFF(DAY, od.full_date, sd.full_date) AS delay_days,
+    so.order_status
+FROM fact_sales_orders AS so
+INNER JOIN dim_customers AS c
+    ON so.customer_id = c.customer_id
+INNER JOIN dim_regions AS r
+    ON c.region_id = r.region_id
+INNER JOIN dim_date AS od
+    ON so.order_date_id = od.date_id
+INNER JOIN dim_date AS sd
+    ON so.ship_date_id = sd.date_id
+WHERE r.country_name = 'Netherlands'
+  AND sd.full_date > DATEADD(DAY, 14, od.full_date)
+ORDER BY delay_days DESC, od.full_date DESC;
+
+
+
+
+
+/* =========================================
+    QUERY 6
+   Products containing Pro, Plus, or Max
+   ========================================= */
+
+-- Returns products whose names contain Pro, Plus, or Max,
+-- regardless of letter case.
+
+
+SELECT
+    p.product_id,
+    p.product_sku,
+    p.product_name,
+    p.brand,
+    p.product_type,
+    p.unit_cost,
+    p.list_price
+FROM dim_products AS p
+WHERE p.product_name LIKE '%Pro%'
+   OR p.product_name LIKE '%Plus%'
+   OR p.product_name LIKE '%Max%'
+ORDER BY p.product_name;
