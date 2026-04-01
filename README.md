@@ -127,14 +127,22 @@ Data Model
  Project Structure
 
 ```
-Will be wrriten soon...
+dataset /
+diagrams /
+docs /
+scripts /
+         ddl /
+         dml /
+         queries / 
 ```
 
 ---
 
  How to Run
 
-Will be wrriten soon...
+---
+
+In SQL Enviroments
 
 ---
 
