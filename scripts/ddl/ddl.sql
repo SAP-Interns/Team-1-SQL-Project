@@ -1,8 +1,6 @@
 USE NordaTradeDB;
 GO
 
-  
-
 DROP TABLE IF EXISTS product_promotions;
 DROP TABLE IF EXISTS rep_customer_assignments;
 DROP TABLE IF EXISTS fact_quotas;
@@ -17,17 +15,21 @@ DROP TABLE IF EXISTS dim_categories;
 DROP TABLE IF EXISTS dim_regions;
 GO
 
+-- =========================================
+-- DIMENSION TABLES
+-- =========================================
 
-  -- DIMENSION TABLES
- 
 CREATE TABLE dim_regions (
-  country_id INT IDENTITY(1,1) NOT NULL,
+    region_id INT IDENTITY(1,1) NOT NULL,
     country_name VARCHAR(100) NOT NULL,
     region_name VARCHAR(100) NOT NULL,
     territory_name VARCHAR(100) NOT NULL,
-    CONSTRAINT PK_dim_regions PRIMARY KEY (country_id)
+    CONSTRAINT PK_dim_regions PRIMARY KEY (region_id)
 );
 GO
+ALTER TABLE dim_regions
+ADD CONSTRAINT UQ_dim_regions_country_region_territory
+UNIQUE (country_name, region_name, territory_name);
 
 CREATE TABLE dim_categories (
     category_id INT IDENTITY(1,1) NOT NULL,
@@ -69,11 +71,11 @@ CREATE TABLE dim_sales_reps (
     is_active BIT NOT NULL DEFAULT 1,
     valid_from DATE NOT NULL,
     valid_to DATE NULL,
-   country_id INT NOT NULL,
+    region_id INT NOT NULL,
     CONSTRAINT PK_dim_sales_reps PRIMARY KEY (sales_rep_id),
     CONSTRAINT UQ_dim_sales_reps_employee_code UNIQUE (employee_code),
     CONSTRAINT FK_dim_sales_reps_region
-        FOREIGN KEY (country_id) REFERENCES dim_regions(country_id),
+        FOREIGN KEY (region_id) REFERENCES dim_regions(region_id),
     CONSTRAINT CHK_dim_sales_reps_valid_dates
         CHECK (valid_to IS NULL OR valid_to >= valid_from)
 );
@@ -90,11 +92,11 @@ CREATE TABLE dim_customers (
     is_active BIT NOT NULL DEFAULT 1,
     created_at DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
     customer_code VARCHAR(50) NOT NULL,
-  country_id INT NOT NULL,
+    region_id INT NOT NULL,
     CONSTRAINT PK_dim_customers PRIMARY KEY (customer_id),
     CONSTRAINT UQ_dim_customers_customer_code UNIQUE (customer_code),
     CONSTRAINT FK_dim_customers_region
-        FOREIGN KEY (country_id) REFERENCES dim_regions(country_id),
+        FOREIGN KEY (region_id) REFERENCES dim_regions(region_id),
     CONSTRAINT CHK_dim_customers_credit_limit CHECK (credit_limit >= 0),
     CONSTRAINT CHK_dim_customers_account_tier CHECK (account_tier IN ('Gold', 'Silver', 'Bronze'))
 );
@@ -124,10 +126,13 @@ CREATE TABLE dim_products (
     CONSTRAINT CHK_dim_products_valid_dates CHECK (valid_to IS NULL OR valid_to >= valid_from)
 );
 GO
+ALTER TABLE dim_products
+ADD CONSTRAINT CHK_dim_products_price_vs_cost
+CHECK (list_price >= unit_cost);
 
-
-  -- FACT TABLES
-
+-- =========================================
+-- FACT TABLES
+-- =========================================
 
 CREATE TABLE fact_sales_orders (
     order_id INT IDENTITY(1,1) NOT NULL,
@@ -142,6 +147,8 @@ CREATE TABLE fact_sales_orders (
     order_date_id INT NOT NULL,
     ship_date_id INT NULL,
     CONSTRAINT PK_fact_sales_orders PRIMARY KEY (order_id),
+    CONSTRAINT CHK_fact_sales_orders_status
+        CHECK (order_status IN ('Pending', 'Confirmed', 'Partially Delivered', 'Delivered', 'Cancelled')),
     CONSTRAINT FK_fact_sales_orders_customer
         FOREIGN KEY (customer_id) REFERENCES dim_customers(customer_id),
     CONSTRAINT FK_fact_sales_orders_sales_rep
@@ -152,6 +159,9 @@ CREATE TABLE fact_sales_orders (
         FOREIGN KEY (ship_date_id) REFERENCES dim_date(date_id)
 );
 GO
+ALTER TABLE fact_sales_orders
+ADD CONSTRAINT CHK_fact_sales_orders_ship_date
+CHECK (ship_date_id IS NULL OR ship_date_id >= order_date_id);
 
 CREATE TABLE fact_order_line_items (
     line_item_id INT IDENTITY(1,1) NOT NULL,
@@ -209,19 +219,30 @@ CREATE TABLE fact_quotas (
         FOREIGN KEY (date_id) REFERENCES dim_date(date_id)
 );
 GO
+ALTER TABLE fact_quotas
+ADD quota_period VARCHAR(20) NOT NULL
+    CONSTRAINT DF_fact_quotas_quota_period DEFAULT 'Monthly';
+GO
+	ALTER TABLE fact_quotas
+ADD CONSTRAINT CHK_fact_quotas_quota_period
+CHECK (quota_period IN ('Monthly', 'Quarterly'));
 
+-- =========================================
+-- BRIDGE / MAPPING TABLES
+-- =========================================
 
-  -- BRIDGE / MAPPING TABLES
-  
 CREATE TABLE dbo.rep_customer_assignments (
+    assignment_id INT IDENTITY(1,1) NOT NULL,
     sales_rep_id INT NOT NULL,
     customer_id INT NOT NULL,
     valid_from DATE NOT NULL,
     valid_to DATE NULL,
     is_active BIT NOT NULL DEFAULT 1,
 
-    CONSTRAINT PK_rep_customer_assignments 
-        PRIMARY KEY (sales_rep_id, customer_id),
+    CONSTRAINT PK_rep_customer_assignments PRIMARY KEY (assignment_id),
+
+    CONSTRAINT UQ_rep_customer_assignments
+        UNIQUE (sales_rep_id, customer_id, valid_from),
 
     CONSTRAINT FK_rep_customer_assignments_sales_rep
         FOREIGN KEY (sales_rep_id) REFERENCES dbo.dim_sales_reps(sales_rep_id),
@@ -231,7 +252,6 @@ CREATE TABLE dbo.rep_customer_assignments (
 
     CONSTRAINT CHK_rep_customer_assignments_dates
         CHECK (valid_to IS NULL OR valid_to >= valid_from)
-
 );
 GO
 
@@ -251,6 +271,4 @@ CREATE TABLE product_promotions (
 );
 GO
 
-
-SELECT * FROM rep_customer_assignments;
-SELECT * FROM dim_date;
+SELECT name FROM sys.tables;
