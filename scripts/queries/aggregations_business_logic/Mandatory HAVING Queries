@@ -143,7 +143,8 @@ INNER JOIN dim_customers AS c
     ON so.customer_id = c.customer_id
 INNER JOIN dim_date AS d
     ON so.order_date_id = d.date_id
-WHERE d.year = YEAR(GETDATE()) - 1
+WHERE d.full_date >= DATEADD(YEAR, -1, CAST(GETDATE() AS DATE))
+  AND d.full_date < CAST(GETDATE() AS DATE)
 GROUP BY
     c.customer_id,
     c.customer_code,
