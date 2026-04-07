@@ -1,4 +1,4 @@
--- Query 1: Calculates customer lifetime revenue and ranks customers within each country
+--- Query 1: Calculates customer lifetime revenue and ranks customers within each country
 
 WITH customer_lifetime AS (
     SELECT
