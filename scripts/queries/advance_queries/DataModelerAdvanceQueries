@@ -1,0 +1,51 @@
+-- Query 1: Calculates customer lifetime revenue and ranks customers within each country
+
+WITH customer_lifetime AS (
+    SELECT
+        c.customer_id,
+        r.country_name,
+        SUM(li.net_amount) AS lifetime_revenue
+    FROM fact_sales_orders so
+    JOIN fact_order_line_items li ON so.order_id = li.order_id
+    JOIN dim_customers c ON so.customer_id = c.customer_id
+    JOIN dim_regions r ON c.region_id = r.region_id
+    GROUP BY c.customer_id, r.country_name
+)
+
+SELECT
+    customer_id,
+    country_name,
+    lifetime_revenue,
+    RANK() OVER (
+        PARTITION BY country_name
+        ORDER BY lifetime_revenue DESC
+    ) AS rank_in_country
+FROM customer_lifetime;
+
+
+
+-- Query 2: Measures the number of days between consecutive orders for each customer
+
+WITH customer_orders AS (
+    SELECT
+        c.customer_id,
+        d.full_date AS order_date,
+        so.order_id,
+        LAG(d.full_date) OVER (
+            PARTITION BY c.customer_id
+            ORDER BY d.full_date, so.order_id
+        ) AS previous_order_date
+    FROM fact_sales_orders so
+    JOIN dim_customers c ON so.customer_id = c.customer_id
+    JOIN dim_date d ON so.order_date_id = d.date_id
+)
+
+SELECT
+    customer_id,
+    order_date,
+    previous_order_date,
+    DATEDIFF(DAY, previous_order_date, order_date) AS days_between_orders
+FROM customer_orders
+WHERE previous_order_date IS NOT NULL
+ORDER BY customer_id, order_date;
+
