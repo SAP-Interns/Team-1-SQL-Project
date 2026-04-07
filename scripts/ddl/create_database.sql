@@ -1,0 +1,5 @@
+CREATE DATABASE NordaTradeDB;
+GO
+
+USE NordaTradeDB;
+GO
