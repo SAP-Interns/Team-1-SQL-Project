@@ -43,33 +43,54 @@ FROM rfm_scores;
       produce a report showing each month's net revenue alongside the previous month's net revenue,
       the absolute change, and the percentage change. Partition by country so each country's trend is independent.
 */
+        WITH monthly_revenue AS (
     SELECT
-    r.country_name,
-    d.year,
-    d.month,
-    SUM(li.net_amount) AS current_revenue,
-    LAG(SUM(li.net_amount)) OVER (
-        PARTITION BY r.country_name
-        ORDER BY d.year, d.month
+        r.country_name,
+        d.year,
+        d.month,
+        SUM(li.net_amount) AS current_revenue
+    FROM fact_order_line_items li
+    JOIN dim_date d 
+        ON li.date_id = d.date_id
+    JOIN fact_sales_orders so 
+        ON li.order_id = so.order_id
+    JOIN dim_customers c 
+        ON so.customer_id = c.customer_id
+    JOIN dim_regions r 
+        ON c.region_id = r.region_id
+    GROUP BY 
+        r.country_name, 
+        d.year, 
+        d.month
+)
+
+SELECT
+    country_name,
+    year,
+    month,
+    current_revenue,
+    LAG(current_revenue) OVER (
+        PARTITION BY country_name
+        ORDER BY year, month
     ) AS previous_revenue,
-    SUM(li.net_amount) - LAG(SUM(li.net_amount)) OVER (
-        PARTITION BY r.country_name
-        ORDER BY d.year, d.month
-    ) AS revenue_change,
-    (SUM(li.net_amount) - LAG(SUM(li.net_amount)) OVER (
-        PARTITION BY r.country_name
-        ORDER BY d.year, d.month
-    )) * 100.0
-    / NULLIF(LAG(SUM(li.net_amount)) OVER (
-        PARTITION BY r.country_name
-        ORDER BY d.year, d.month
-    ),0) AS percentage_change
-FROM fact_order_line_items li
-JOIN dim_date d ON li.date_id = d.date_id
-JOIN fact_sales_orders so ON li.order_id = so.order_id
-JOIN dim_customers c ON so.customer_id = c.customer_id
-JOIN dim_regions r ON c.region_id = r.region_id
-GROUP BY r.country_name, d.year, d.month; 
+    current_revenue 
+        - LAG(current_revenue) OVER (
+            PARTITION BY country_name
+            ORDER BY year, month
+        ) AS revenue_change,
+    (current_revenue 
+        - LAG(current_revenue) OVER (
+            PARTITION BY country_name
+            ORDER BY year, month
+        )
+    ) * 100.0
+    / NULLIF(
+        LAG(current_revenue) OVER (
+            PARTITION BY country_name
+            ORDER BY year, month
+        ), 0
+    ) AS percentage_change
+FROM monthly_revenue; 
 
 /* 
       3. Running Total by Quarter (SUM OVER Required): Produce a cumulative revenue report showing, for each order,
