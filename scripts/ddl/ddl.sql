@@ -102,6 +102,11 @@ CREATE TABLE dim_customers (
 );
 GO
 
+ALTER TABLE dim_customers
+ADD customer_name VARCHAR(100) NOT NULL 
+    CONSTRAINT DF_dim_customers_customer_name DEFAULT 'Unknown';
+GO
+
 CREATE TABLE dim_products (
     product_id INT IDENTITY(1,1) NOT NULL,
     product_sku VARCHAR(50) NOT NULL,
