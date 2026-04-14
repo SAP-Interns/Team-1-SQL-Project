@@ -3,7 +3,6 @@
    QUERY 1
    Full Order Summary
    ========================================= */
-
 SELECT
     so.order_id,
     li.line_item_id,
@@ -64,14 +63,12 @@ INNER JOIN dim_products AS p
 INNER JOIN dim_date AS od
     ON so.order_date_id = od.date_id
 
-INNER JOIN dim_date AS sd
+LEFT JOIN dim_date AS sd
     ON so.ship_date_id = sd.date_id
 
 ORDER BY
     so.order_id,
     li.line_item_id;
-
-
 
 
 
