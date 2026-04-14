@@ -1,0 +1,35 @@
+Query 1 Review from Query Engineer Query:
+/* =========================================
+    QUERY 1
+   German Gold-tier customers
+   ========================================= */
+
+-- Returns German Gold-tier customers with credit limits above €50,000,
+-- ordered by credit limit in descending order.
+
+SELECT
+    c.customer_id,
+    c.customer_code,
+    c.customer_type,
+    c.customer_group,
+    c.account_tier,
+    c.credit_limit,
+    r.country_name,
+    r.region_name,
+    r.territory_name
+FROM dim_customers AS c
+INNER JOIN dim_regions AS r
+    ON c.region_id = r.region_id
+WHERE r.country_name = 'Germany'
+  AND c.account_tier = 'Gold'
+  AND c.credit_limit > 50000
+ORDER BY c.credit_limit DESC;
+
+Review:
+The query is well-structured and correctly fulfills its objective of retrieving German Gold-tier customers with a credit limit above €50,000.
+The join between dim_customers and dim_regions is appropriate and ensures accurate mapping of customers to their geographic context.
+The filtering conditions are clear and align well with the business requirement, and the ordering by credit limit in descending order
+makes the output meaningful for analysis. However, the query could be improved by handling potential NULL values in credit_limit explicitly
+to ensure data quality. Additionally, the country filter is hardcoded, which limits reusability, and could be parameterized in a more flexible
+implementation. Some selected columns, such as customer_type and customer_group, may not be necessary depending on the use case and could be reviewed
+to keep the query more focused. Overall, the query is correct and readable, with minor improvements possible for robustness and flexibility.
