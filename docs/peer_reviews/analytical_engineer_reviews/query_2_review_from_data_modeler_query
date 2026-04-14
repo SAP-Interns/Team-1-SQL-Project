@@ -1,0 +1,31 @@
+Query 2 Review from Data Modeler:
+
+/* =========================================
+   QUERY 2
+   Top 10 most sold products
+   ========================================= */
+
+-- Returns top 10 products based on total quantity sold.
+
+SELECT TOP 10
+    p.product_id,
+    p.product_name,
+    SUM(li.quantity) AS total_quantity_sold
+FROM dim_products AS p
+INNER JOIN fact_order_line_items AS li
+    ON p.product_id = li.product_id
+GROUP BY
+    p.product_id,
+    p.product_name
+ORDER BY total_quantity_sold DESC;
+
+Review:
+The query correctly retrieves the top 10 products based on total quantity sold and is clear and easy to understand.
+The join between dim_products and fact_order_line_items is appropriate, ensuring that product details are combined
+with transactional data, and the use of SUM(li.quantity) accurately aggregates total units sold per product.
+The GROUP BY clause is correctly applied at the product level, and the ORDER BY total_quantity_sold DESC ensures
+that the highest-selling products are returned first, which aligns with the business objective. However, the query
+could be improved by considering whether products with no sales should be included (in which case a LEFT JOIN might be more appropriate).
+Additionally, handling potential NULL values in quantity could improve robustness. From a business perspective, it might
+also be useful to include additional context such as product category or revenue, depending on reporting needs. Overall,
+the query is correct and efficient, with minor enhancements possible for completeness and flexibility.
