@@ -1,0 +1,86 @@
+USE NordaTradeDB;
+GO
+
+DROP VIEW IF EXISTS dbo.vw_dm_country_month_kpi_trend;
+GO
+
+CREATE VIEW dbo.vw_dm_country_month_kpi_trend AS
+SELECT
+    r.country_name,
+    d.year,
+    d.month,
+    SUM(li.net_amount) AS total_revenue,
+    COUNT(DISTINCT so.order_id) AS total_orders,
+    CAST(
+        SUM(li.net_amount) * 1.0 
+        / NULLIF(COUNT(DISTINCT so.order_id), 0) 
+        AS DECIMAL(18, 2)
+    ) AS avg_order_value
+FROM dbo.fact_order_line_items li
+JOIN dbo.fact_sales_orders so
+    ON li.order_id = so.order_id
+JOIN dbo.dim_customers c
+    ON so.customer_id = c.customer_id
+JOIN dbo.dim_regions r
+    ON c.region_id = r.region_id
+JOIN dbo.dim_date d
+    ON li.date_id = d.date_id
+WHERE so.order_status <> 'Cancelled'
+GROUP BY
+    r.country_name,
+    d.year,
+    d.month;
+GO
+
+DROP VIEW IF EXISTS dbo.vw_dm_rep_portfolio_quality;
+GO
+
+CREATE VIEW dbo.vw_dm_rep_portfolio_quality AS
+WITH base AS (
+    SELECT
+        r.sales_rep_id,
+        r.rep_name,
+        reg.country_name,
+        reg.region_name,
+        SUM(li.net_amount) AS actual_revenue,
+        COUNT(DISTINCT so.customer_id) AS customer_count,
+        ISNULL(SUM(q.quota_amount), 0) AS quota_amount
+    FROM dbo.dim_sales_reps r
+    JOIN dbo.dim_regions reg
+        ON r.region_id = reg.region_id
+    JOIN dbo.fact_sales_orders so
+        ON r.sales_rep_id = so.sales_rep_id
+    JOIN dbo.fact_order_line_items li
+        ON so.order_id = li.order_id
+    LEFT JOIN dbo.fact_quotas q
+        ON r.sales_rep_id = q.sales_rep_id
+    LEFT JOIN dbo.dim_date dq
+        ON q.date_id = dq.date_id
+    WHERE so.order_status <> 'Cancelled'
+      AND (dq.year = YEAR(GETDATE()) OR dq.year IS NULL)
+    GROUP BY
+        r.sales_rep_id,
+        r.rep_name,
+        reg.country_name,
+        reg.region_name
+)
+
+SELECT
+    sales_rep_id,
+    rep_name,
+    country_name,
+    region_name,
+    actual_revenue,
+    customer_count,
+    quota_amount,
+    CAST(
+        actual_revenue * 100.0 
+        / NULLIF(quota_amount, 0)
+        AS DECIMAL(10, 2)
+    ) AS attainment_percentage,
+    DENSE_RANK() OVER (
+        PARTITION BY region_name
+        ORDER BY actual_revenue DESC
+    ) AS rank_within_region
+FROM base;
+GO
