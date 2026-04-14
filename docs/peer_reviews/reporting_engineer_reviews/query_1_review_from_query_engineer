@@ -1,0 +1,86 @@
+Query 1 Review from Query Engineer:
+
+/* =========================================
+   QUERY 1
+   Customer Delivery Exception Report
+   ========================================= */
+
+-- Business purpose:
+-- This report exposes delayed shipments with customer, geography, sales rep,
+-- and order value in one result set. It is useful for operational follow-up
+-- and is kept intentionally simple for Week 2 defense and review.
+
+SELECT
+    so.order_id,
+    c.customer_code,
+    (
+        SELECT r.country_name
+        FROM dim_regions AS r
+        WHERE r.region_id = c.region_id
+    ) AS country_name,
+    sr.rep_name,
+    (
+        SELECT d.full_date
+        FROM dim_date AS d
+        WHERE d.date_id = so.order_date_id
+    ) AS order_date,
+    (
+        SELECT d.full_date
+        FROM dim_date AS d
+        WHERE d.date_id = so.ship_date_id
+    ) AS ship_date,
+    DATEDIFF(
+        DAY,
+        (
+            SELECT d.full_date
+            FROM dim_date AS d
+            WHERE d.date_id = so.order_date_id
+        ),
+        (
+            SELECT d.full_date
+            FROM dim_date AS d
+            WHERE d.date_id = so.ship_date_id
+        )
+    ) AS shipping_delay_days,
+    ot.order_net_value
+FROM fact_sales_orders AS so
+INNER JOIN dim_customers AS c
+    ON so.customer_id = c.customer_id
+INNER JOIN dim_sales_reps AS sr
+    ON so.sales_rep_id = sr.sales_rep_id
+INNER JOIN
+(
+    SELECT
+        order_id,
+        CAST(SUM(net_amount) AS DECIMAL(18,2)) AS order_net_value
+    FROM fact_order_line_items
+    GROUP BY
+        order_id
+) AS ot
+    ON so.order_id = ot.order_id
+WHERE so.ship_date_id IS NOT NULL
+  AND so.order_status <> 'Cancelled'
+  AND DATEDIFF(
+        DAY,
+        (
+            SELECT d.full_date
+            FROM dim_date AS d
+            WHERE d.date_id = so.order_date_id
+        ),
+        (
+            SELECT d.full_date
+            FROM dim_date AS d
+            WHERE d.date_id = so.ship_date_id
+        )
+    ) > 14
+ORDER BY
+    shipping_delay_days DESC,
+    ot.order_net_value DESC,
+    so.order_id;
+
+Review:
+This is a useful reporting query with a clear business purpose and a sensible final output. 
+The delayed-shipment focus is easy to understand, and the derived order value subquery is a good way to aggregate line-item revenue at the order level before joining it into the report. 
+The filtering logic is also aligned with the use case because it keeps only shipped, non-cancelled orders and highlights the most severe delays first.
+The main area for improvement is performance and readability. The repeated scalar subqueries against dim_date and dim_regions work logically, but they make the query harder to maintain and can become less efficient as data grows. 
+Replacing those scalar lookups with explicit JOINs would make the query easier to follow and more scalable. Overall, the query is correct and business-relevant, with a good foundation that would benefit from a more join-friendly structure.

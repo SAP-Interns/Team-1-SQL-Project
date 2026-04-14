@@ -1,0 +1,55 @@
+Query 2 Review from Data Modeler:
+
+/* =========================================
+   QUERY 2
+   Returns Operations Detail Report
+   ========================================= */
+
+-- Business purpose:
+-- This report joins returns back to the original sale, customer, product,
+-- category, and return date. It gives the operations team a clear
+-- case-level view of returns and supports the future returns analysis layer.
+-- The output is intentionally kept compact so it is easier to explain.
+
+SELECT
+    fr.return_id,
+    (
+        SELECT d.full_date
+        FROM dim_date AS d
+        WHERE d.date_id = fr.date_id
+    ) AS return_date,
+    so.order_id,
+    (
+        SELECT c.customer_code
+        FROM dim_customers AS c
+        WHERE c.customer_id = so.customer_id
+    ) AS customer_code,
+    p.product_name,
+    (
+        SELECT cat.category_name
+        FROM dim_categories AS cat
+        WHERE cat.category_id = p.category_id
+    ) AS category_name,
+    fr.return_quantity,
+    CAST(fr.credit_amount AS DECIMAL(18,2)) AS credit_amount,
+    fr.return_reason
+FROM fact_returns AS fr
+INNER JOIN fact_order_line_items AS li
+    ON fr.line_item_id = li.line_item_id
+INNER JOIN fact_sales_orders AS so
+    ON li.order_id = so.order_id
+INNER JOIN dim_products AS p
+    ON li.product_id = p.product_id
+ORDER BY
+    return_date DESC,
+    fr.credit_amount DESC,
+    so.order_id,
+    li.line_item_id;
+
+Review:
+This query is built on the correct fact-to-dimension path and reflects the data model well. The join flow from returns to line items, 
+then to sales orders and products, preserves referential integrity and makes the output trustworthy for operational reporting. 
+The selected columns are relevant, and the result is at an appropriate grain for a case-level returns detail report.
+From a modeling and maintainability perspective, the main improvement would be to replace the scalar subqueries for return date, 
+customer code, and category name with regular JOINs to dim_date, dim_customers, and dim_categories. That would make the query more consistent with dimensional modeling practices, 
+easier to extend later, and more efficient on larger datasets. Overall, the query is logically correct and fits the reporting objective well, with clear room for structural improvement through explicit joins.
