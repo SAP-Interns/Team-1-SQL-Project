@@ -199,48 +199,62 @@ regions AS
         region_id,
         ROW_NUMBER() OVER (ORDER BY region_id) AS rn
     FROM dbo.dim_regions
+),
+base AS
+(
+    -- marrim max customer_code ekzistues
+    SELECT ISNULL(MAX(CAST(SUBSTRING(customer_code,5,10) AS INT)),0) AS max_code
+    FROM dbo.dim_customers
 )
 INSERT INTO dbo.dim_customers
 (
+    customer_name, 
     customer_type, customer_group, customer_status, account_tier,
     credit_limit, billing_address, is_active, customer_code, region_id
 )
 SELECT
+    
+    CONCAT(fn.first_name, ' ', ln.last_name),
+
     CHOOSE(((n.n - 1) % 3) + 1, 'Corporate', 'SME', 'Enterprise'),
-    CHOOSE(((n.n - 1) % 5) + 1,
-        'Industrial Accounts', 'Office Accounts', 'Technology Accounts',
-        'Dealer Accounts', 'Services Accounts'
-    ),
-    'Active',
-    CASE
-        WHEN n.n % 10 IN (1,2,3) THEN 'Gold'
-        WHEN n.n % 10 IN (4,5,6) THEN 'Silver'
-        ELSE 'Bronze'
-    END,
-    CASE
-        WHEN n.n % 10 IN (1,2,3) THEN 80000 + (n.n * 50)
-        WHEN n.n % 10 IN (4,5,6) THEN 35000 + (n.n * 35)
-        ELSE 12000 + (n.n * 20)
-    END,
-    CONCAT(
-        CAST((n.n % 150) + 1 AS VARCHAR(4)), ' ',
-        CHOOSE(((n.n - 1) % 6) + 1,
-            'Business Park', 'Commerce Street', 'Industrial Road',
-            'Central Avenue', 'Logistics Way', 'Enterprise Blvd'
-        ),
-        ', ',
-        CHOOSE((((n.n - 1) / 5) % 10) + 1,
-            'Munich', 'Frankfurt', 'Paris', 'Lyon', 'Vienna',
-            'Graz', 'Zurich', 'Geneva', 'Amsterdam', 'Rotterdam'
-        )
-    ),
+    CHOOSE(((n.n - 1) % 4) + 1, 'Group A', 'Group B', 'Group C', 'Group D'),
+    CHOOSE(((n.n - 1) % 3) + 1, 'Active', 'Inactive', 'Prospect'),
+    CHOOSE(((n.n - 1) % 3) + 1, 'Gold', 'Silver', 'Bronze'),
+
+    (ABS(CHECKSUM(NEWID())) % 100000) + 1000,
+
+    CONCAT('Street ', n.n, ', City ', n.n),
+
     1,
-    CONCAT('CUST', RIGHT('0000' + CAST(n.n AS VARCHAR(4)), 4)),
+
+    -- UNIQUE CUSTOMER CODE (fix)
+    CONCAT('CUST', FORMAT(b.max_code + n.n, '000')),
+
     r.region_id
+
 FROM nums n
+CROSS JOIN base b
+
+-- FIRST NAME
+CROSS APPLY (
+    SELECT CHOOSE(ABS(CHECKSUM(NEWID())) % 15 + 1,
+        'Liam','Noah','Oliver','Elijah','James',
+        'William','Benjamin','Lucas','Henry','Alexander',
+        'Emma','Olivia','Ava','Sophia','Isabella'
+    ) AS first_name
+) fn
+
+-- LAST NAME
+CROSS APPLY (
+    SELECT CHOOSE(ABS(CHECKSUM(NEWID())) % 15 + 1,
+        'Smith','Johnson','Williams','Brown','Jones',
+        'Garcia','Miller','Davis','Rodriguez','Martinez',
+        'Anderson','Taylor','Thomas','Hernandez','Moore'
+    ) AS last_name
+) ln
+
 JOIN regions r
-    ON r.rn = ((n.n - 1) % 20) + 1;
-GO
+    ON ((n.n - 1) % (SELECT COUNT(*) FROM regions)) + 1 = r.rn;
 
 /* =======================================
    6) dim_products
@@ -732,4 +746,16 @@ UNION ALL SELECT 'fact_sales_orders', COUNT(*) FROM fact_sales_orders
 UNION ALL SELECT 'fact_order_line_items', COUNT(*) FROM fact_order_line_items
 UNION ALL SELECT 'fact_returns', COUNT(*) FROM fact_returns;
 GO
+
+
+--  TEST: Verifying that customer_name contains exactly first name and last name (no invalid entries)
+
+SELECT *
+FROM dbo.dim_customers
+WHERE 
+    customer_name LIKE '% %'
+    AND customer_name NOT LIKE ' %'
+    AND customer_name NOT LIKE '% '
+    AND LEN(LTRIM(RTRIM(customer_name))) 
+        - LEN(REPLACE(LTRIM(RTRIM(customer_name)), ' ', '')) = 1;
 
