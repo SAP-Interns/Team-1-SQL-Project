@@ -1,0 +1,46 @@
+-- Query 1 Review from Analytical Engineer Query
+
+/* 
+    1. Customer RFM Segmentation (CTE Required): Using a multi-step CTE, compute each customer's Recency (days since last order),
+    Frequency (number of orders in the past year), and Monetary (total spend in the past year) scores. Then classify
+    each customer into one of five segments: Champions, Loyal, At Risk, Lost, and New - using scoring logic you define and document.
+*/
+WITH customer_orders AS (
+    SELECT
+        c.customer_id,
+        MAX(d.full_date) AS last_order_date,
+        COUNT(DISTINCT so.order_id) AS frequency,
+        SUM(li.net_amount) AS monetary
+    FROM fact_sales_orders so
+    JOIN fact_order_line_items li ON so.order_id = li.order_id
+    JOIN dim_customers c ON so.customer_id = c.customer_id
+    JOIN dim_date d ON so.order_date_id = d.date_id
+    WHERE d.full_date >= DATEADD(YEAR, -1, GETDATE())
+    GROUP BY c.customer_id
+),
+rfm_scores AS (
+    SELECT
+        customer_id,
+        DATEDIFF(DAY, last_order_date, GETDATE()) AS recency,
+        frequency,
+        monetary
+    FROM customer_orders
+)
+SELECT
+    *,
+    CASE
+        WHEN recency <= 30 AND frequency >= 10 AND monetary >= 10000 THEN 'Champions'
+        WHEN recency <= 60 AND frequency >= 5 THEN 'Loyal'
+        WHEN recency > 90 AND frequency < 3 THEN 'At Risk'
+        WHEN recency > 180 THEN 'Lost'
+        ELSE 'New'
+    END AS customer_segment
+FROM rfm_scores;
+
+
+
+
+Query Review:
+The query is well-structured and correctly applies a multi-step CTE to calculate RFM metrics. The joins and aggregations are accurate, and the use of DATEDIFF, COUNT, and SUM is appropriate for the analysis. The segmentation logic is clear and easy to understand.
+However, the thresholds for segments are hardcoded, which limits flexibility and could be improved by making them dynamic. Also, customers without orders in the past year are excluded, which may lead to incomplete segmentation. Additionally, using SELECT * is not recommended and should be replaced with explicit columns.
+Overall, the query is correct and readable, with minor improvements possible for flexibility and completeness.
