@@ -1,0 +1,36 @@
+/* 
+      6. Products Never Ordered in High-Revenue Regions (Correlated Subquery): Identify products that have never
+         been ordered by any customer in regions that generated more than €1M in revenue in the past year.
+         Use a correlated subquery in the WHERE clause.
+*/
+
+SELECT p.product_id, p.product_name
+FROM dim_products p
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM fact_order_line_items li
+    JOIN fact_sales_orders so ON li.order_id = so.order_id
+    JOIN dim_customers c ON so.customer_id = c.customer_id
+    JOIN dim_regions r ON c.region_id = r.region_id
+    JOIN dim_date d ON li.date_id = d.date_id
+    WHERE li.product_id = p.product_id
+    AND r.region_id IN (
+        SELECT r2.region_id
+        FROM fact_order_line_items li2
+        JOIN fact_sales_orders so2 ON li2.order_id = so2.order_id
+        JOIN dim_customers c2 ON so2.customer_id = c2.customer_id
+        JOIN dim_regions r2 ON c2.region_id = r2.region_id
+        JOIN dim_date d2 ON li2.date_id = d2.date_id
+        WHERE d2.year = YEAR(GETDATE()) - 1
+        GROUP BY r2.region_id
+        HAVING SUM(li2.net_amount) > 1000000
+    )
+);
+
+Query Review:
+This is a strong mandatory query that answers an advanced business question . The use of NOT EXISTS fits well here, 
+and the logic makes sense because it identifies products that have never been ordered in high-revenue regions. 
+The joins are done correctly . One thing that could be improved is readability, since the query is a bit complex 
+and could be easier to follow with cleaner formatting or by moving the high-revenue region part into a CTE. 
+It would also help to make the time filter clearer, so the definition of “past year” is more direct.
+Overall, this is a well-built mandatory query that fits the Phase 5 requirements .
