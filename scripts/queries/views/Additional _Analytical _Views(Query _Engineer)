@@ -1,0 +1,156 @@
+/* =========================================
+   EXTRA VIEW: COUNTRY CATEGORY SALES
+   ========================================= */
+
+
+DROP VIEW IF EXISTS vw_country_category_sales;
+GO
+DROP VIEW IF EXISTS vw_country_category_sales_summary;
+GO
+DROP VIEW IF EXISTS vw_base_country_category_sales;
+GO
+
+
+/* =========================================
+   TIER 1: BASE VIEW
+   ========================================= */
+CREATE VIEW vw_base_country_category_sales AS
+SELECT
+    so.order_id,
+    d.year,
+    d.month,
+    r.country_name,
+    cat.category_name,
+    li.quantity,
+    li.net_amount
+FROM fact_sales_orders AS so
+INNER JOIN fact_order_line_items AS li
+    ON so.order_id = li.order_id
+INNER JOIN dim_customers AS c
+    ON so.customer_id = c.customer_id
+INNER JOIN dim_regions AS r
+    ON c.region_id = r.region_id
+INNER JOIN dim_products AS p
+    ON li.product_id = p.product_id
+INNER JOIN dim_categories AS cat
+    ON p.category_id = cat.category_id
+INNER JOIN dim_date AS d
+    ON so.order_date_id = d.date_id;
+GO
+
+
+/* =========================================
+   TIER 2: SUMMARY VIEW
+   ========================================= */
+CREATE VIEW vw_country_category_sales_summary AS
+SELECT
+    country_name,
+    category_name,
+    year,
+    month,
+    COUNT(DISTINCT order_id) AS total_orders,
+    SUM(quantity) AS total_units_sold,
+    SUM(net_amount) AS total_revenue
+FROM vw_base_country_category_sales
+GROUP BY
+    country_name,
+    category_name,
+    year,
+    month;
+GO
+
+
+/* =========================================
+   TIER 3: FINAL REPORT VIEW
+   ========================================= */
+CREATE VIEW vw_country_category_sales AS
+SELECT
+    country_name,
+    category_name,
+    year,
+    month,
+    total_orders,
+    total_units_sold,
+    total_revenue
+FROM vw_country_category_sales_summary;
+GO
+
+
+
+/* =========================================
+   EXTRA VIEW: INVENTORY RISK REPORT
+   ========================================= */
+
+
+DROP VIEW IF EXISTS vw_inventory_risk_report;
+GO
+DROP VIEW IF EXISTS vw_inventory_risk_summary;
+GO
+DROP VIEW IF EXISTS vw_base_inventory_risk;
+GO
+
+
+/* =========================================
+   TIER 1: BASE VIEW
+   ========================================= */
+CREATE VIEW vw_base_inventory_risk AS
+SELECT
+    p.product_id,
+    p.product_sku,
+    p.product_name,
+    p.brand,
+    p.stock_level,
+    so.order_id,
+    d.year,
+    d.month,
+    li.quantity,
+    li.net_amount
+FROM dim_products AS p
+LEFT JOIN fact_order_line_items AS li
+    ON p.product_id = li.product_id
+LEFT JOIN fact_sales_orders AS so
+    ON li.order_id = so.order_id
+LEFT JOIN dim_date AS d
+    ON so.order_date_id = d.date_id;
+GO
+
+
+/* =========================================
+   TIER 2: SUMMARY VIEW
+   ========================================= */
+CREATE VIEW vw_inventory_risk_summary AS
+SELECT
+    product_id,
+    product_sku,
+    product_name,
+    brand,
+    stock_level,
+    COUNT(DISTINCT order_id) AS total_orders,
+    COALESCE(SUM(quantity), 0) AS total_units_sold,
+    COALESCE(SUM(net_amount), 0) AS total_revenue
+FROM vw_base_inventory_risk
+GROUP BY
+    product_id,
+    product_sku,
+    product_name,
+    brand,
+    stock_level;
+GO
+
+
+/* =========================================
+   TIER 3: FINAL REPORT VIEW
+   ========================================= */
+CREATE VIEW vw_inventory_risk_report AS
+SELECT
+    product_id,
+    product_sku,
+    product_name,
+    brand,
+    stock_level,
+    total_orders,
+    total_units_sold,
+    total_revenue
+FROM vw_inventory_risk_summary;
+GO
+
