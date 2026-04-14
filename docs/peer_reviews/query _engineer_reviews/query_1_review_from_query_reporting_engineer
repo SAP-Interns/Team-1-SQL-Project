@@ -1,0 +1,32 @@
+/* =========================================
+   QUERY 1
+   Active products never ordered
+   ========================================= */
+
+SELECT
+    p.product_id,
+    p.product_sku,
+    p.product_name,
+    p.brand,
+    p.list_price,
+    p.stock_level
+FROM dim_products AS p
+LEFT JOIN fact_order_line_items AS li
+    ON p.product_id = li.product_id
+WHERE p.is_active = 1
+  AND li.line_item_id IS NULL
+ORDER BY
+    p.stock_level DESC,
+    p.product_name;
+
+
+Query Review:
+This is a strong extra query that adds useful analytical value to the project.
+It is clear, well-structured, and technically correct. The use of LEFT JOIN with NULL filtering works well for 
+identifying active products that have never appeared in any order line item. 
+The selected columns are relevant for business analysis, and it follows good practice by explicitly naming columns 
+instead of using SELECT *.
+Ordering by stock_level DESC is also a smart choice, as it helps highlight unsold active products with the highest 
+remaining inventory.
+Overall, this is a useful extra query for inventory analysis and for identifying potential dead stock or products 
+that may need attention.
