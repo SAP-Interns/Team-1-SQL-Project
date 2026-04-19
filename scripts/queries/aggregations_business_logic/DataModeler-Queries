@@ -1,0 +1,52 @@
+
+
+--Query 1 – Average Discount Impact on Revenue per Month
+
+SELECT
+    d.year,
+    d.month,
+    SUM(li.gross_amount) AS total_gross,
+    SUM(li.net_amount) AS total_net,
+    SUM(li.gross_amount - li.net_amount) AS total_discount_value
+FROM fact_order_line_items li
+JOIN dim_date d 
+    ON li.date_id = d.date_id
+GROUP BY d.year, d.month
+ORDER BY d.year, d.month;
+
+
+--Query 2 – Top Performing Sales Rep per Country
+
+SELECT
+    country_name,
+    sales_rep_id,
+    rep_name,
+    total_revenue
+FROM
+(
+    SELECT
+        r.country_name,
+        sr.sales_rep_id,
+        sr.rep_name,
+        SUM(li.net_amount) AS total_revenue,
+        ROW_NUMBER() OVER (
+            PARTITION BY r.country_name
+            ORDER BY SUM(li.net_amount) DESC
+        ) AS rn
+    FROM fact_sales_orders so
+    JOIN fact_order_line_items li 
+        ON so.order_id = li.order_id
+    JOIN dim_sales_reps sr 
+        ON so.sales_rep_id = sr.sales_rep_id
+    JOIN dim_customers c 
+        ON so.customer_id = c.customer_id
+    JOIN dim_regions r 
+        ON c.region_id = r.region_id
+    GROUP BY
+        r.country_name,
+        sr.sales_rep_id,
+        sr.rep_name
+) x
+WHERE rn = 1
+ORDER BY country_name;
+
