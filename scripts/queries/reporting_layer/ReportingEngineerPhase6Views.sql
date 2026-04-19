@@ -51,7 +51,7 @@ JOIN dbo.dim_products AS p
 JOIN dbo.dim_categories AS cat
     ON p.category_id = cat.category_id
 JOIN dbo.dim_date AS d
-    ON so.order_date_id = d.date_id;
+    ON li.date_id = d.date_id;
 GO
 
 /* Base view: quota facts with geography and time */
@@ -81,17 +81,24 @@ GO
 CREATE OR ALTER VIEW dbo.vw_base_return_detail
 AS
 SELECT
+    fr.line_item_id,
     fr.return_quantity,
     fr.credit_amount,
     fr.return_reason,
+    d.full_date AS return_date,
     d.year AS return_year,
     d.month AS return_month,
     d.month_name AS return_month_name,
+    b.order_date AS sale_date,
+    b.order_year AS sale_year,
+    b.order_month AS sale_month,
+    b.order_month_name AS sale_month_name,
     b.order_status,
     b.customer_id,
     b.customer_country_name,
     b.product_id,
-    b.category_name
+    b.category_name,
+    b.quantity AS sold_quantity
 FROM dbo.fact_returns AS fr
 JOIN dbo.vw_base_order_line_detail AS b
     ON fr.line_item_id = b.line_item_id
@@ -520,10 +527,10 @@ WITH sold AS (
 ),
 returned AS (
     SELECT
-        DATEFROMPARTS(r.return_year, r.return_month, 1) AS period_start_date,
-        r.return_year AS calendar_year,
-        r.return_month AS calendar_month,
-        r.return_month_name AS month_name,
+        DATEFROMPARTS(r.sale_year, r.sale_month, 1) AS period_start_date,
+        r.sale_year AS calendar_year,
+        r.sale_month AS calendar_month,
+        r.sale_month_name AS month_name,
         r.customer_country_name AS country_name,
         r.category_name,
         r.return_reason,
@@ -532,10 +539,10 @@ returned AS (
     FROM dbo.vw_base_return_detail AS r
     WHERE r.order_status <> 'Cancelled'
     GROUP BY
-        DATEFROMPARTS(r.return_year, r.return_month, 1),
-        r.return_year,
-        r.return_month,
-        r.return_month_name,
+        DATEFROMPARTS(r.sale_year, r.sale_month, 1),
+        r.sale_year,
+        r.sale_month,
+        r.sale_month_name,
         r.customer_country_name,
         r.category_name,
         r.return_reason

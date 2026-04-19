@@ -12,7 +12,9 @@ This document covers the Week 3 Phase 7 deliverables:
 Supporting SQL artifacts:
 
 - `scripts/ddl/phase7_performance_indexes.sql`
+- `scripts/ddl/phase7_performance_indexes_rollback.sql`
 - `scripts/queries/performance/ReportingEngineerPhase7AuditQueries.sql`
+- `scripts/queries/reporting_layer/ReportingEngineerPhase6Rollback.sql`
 
 ## Assumed Data Volume
 Based on the current seed script:
@@ -126,6 +128,19 @@ The fifth audit query is taken from the shared Phase 4 team query library becaus
 | `vw_rep_performance_scorecard` | Yes | Good candidate because managers revisit rep attainment repeatedly within the same period | Daily or after quota refresh | Same business day |
 | `vw_monthly_trend` | No for current scale | Keep as a normal view for now; the data volume is still small and the logic is understandable | Reassess when line-item volume grows materially | Real-time is acceptable |
 | `vw_returns_analysis` | No for current scale | Keep as a normal view for now because returns volume is still limited | Reassess if returns volume or dashboard concurrency rises | Real-time is acceptable |
+
+## Rollback Procedures
+### Phase 7 Index Deployment Rollback
+- Trigger the rollback if write latency increases materially after index deployment, if the audited queries regress instead of improving, or if the deployment window must be backed out for operational reasons.
+- Use `scripts/ddl/phase7_performance_indexes_rollback.sql` to remove only the secondary indexes introduced by the Phase 7 package. The script is idempotent because every drop is guarded by an existence check.
+- After index rollback, rerun the Phase 6 smoke test and at least the highest-priority audit queries to confirm the reporting layer still compiles and that query behavior has returned to the pre-index baseline.
+- If the rollback is performed in production, capture the post-rollback execution evidence in the same place as the original audit evidence so the change history remains defensible.
+
+### Phase 6 Reporting-Layer Release Rollback
+- Trigger the rollback if any of the released reporting views fail to compile, return incorrect business totals, or break downstream consumers after deployment.
+- Use `scripts/queries/reporting_layer/ReportingEngineerPhase6Rollback.sql` to remove the Phase 6 reporting views in reverse dependency order: Tier 3 final views first, Tier 2 summary views second, and Tier 1 base views last.
+- After the rollback script finishes, redeploy the last approved reporting-layer version from source control if one exists. If no approved previous version is available, keep the reporting layer disabled and use the pre-release query library until the corrected view package is ready.
+- Verification after reporting rollback should include confirming that the rollback script completed without dependency errors and that any restored reporting package passes `scripts/queries/reporting_layer/ReportingEngineerPhase6SmokeTest.sql`.
 
 ## 37. Production Checklist
 - Confirm all primary keys, foreign keys, and check constraints in `ddl.sql` are present and enabled.
